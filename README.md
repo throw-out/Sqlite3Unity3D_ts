@@ -1,13 +1,13 @@
 ## 它是什么?
 
 * **简介**
-  > 基于Sqlite3开源数据库, 使用typescript语言开发
-  > 上一个[sqlite_for_unity](https://github.com/layerpsr/sqlite3_for_unity)为纯C#实现
-  > 搭配[puerts](https://github.com/Tencent/puerts)为Unity平台提供简单易用丶高效性能的对象存储
+  > 基于Sqlite3开源数据库, 使用typescript语言开发. 
+  > 上一个[sqlite_for_unity](https://github.com/layerpsr/sqlite3_for_unity)为纯C#实现. 
+  > 搭配[puerts](https://github.com/Tencent/puerts)为Unity平台提供简单易用丶高效性能的对象存储. 
 
 * **Sqlite3简介**
-  > Sqlite3是遵守ACID的关系型数据库, 小巧丶嵌入式丶无需安装
-  > 能够跟很多种语言相结合, 运行时占有资源非常低
+  > Sqlite3是遵守ACID的关系型数据库, 小巧丶嵌入式丶无需安装. 
+  > 能够跟很多种语言相结合, 运行时占有资源非常低. 
 
 * **原项目**
   > 此项目基于[SQLite4Unity3d](https://github.com/robertohuertasm/SQLite4Unity3d)
