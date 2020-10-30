@@ -1,0 +1,9 @@
+{
+    "name": "ts_assets",
+    "version": "1.0.0",
+    "description": "ts project assets",
+    "scripts": {
+        "build": "tsc -p tsconfig.json",
+        "watch_build": "tsc -w -p tsconfig.json"
+    }
+}
