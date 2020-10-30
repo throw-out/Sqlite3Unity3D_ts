@@ -1,8 +1,7 @@
 ## 它是什么?
 
 * **简介**
-  > 基于Sqlite3开源数据库, 使用typescript语言开发. 
-  > 上一个[sqlite_for_unity](https://github.com/layerpsr/sqlite3_for_unity)为纯C#实现. 
+  > 基于Sqlite3开源数据库, 使用typescript语言开发([sqlite_for_unity](https://github.com/layerpsr/sqlite3_for_unity)为纯C#). 
   > 搭配[puerts](https://github.com/Tencent/puerts)为Unity平台提供简单易用丶高效性能的对象存储. 
 
 * **Sqlite3简介**
