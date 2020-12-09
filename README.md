@@ -57,7 +57,7 @@
 * **查询记录**
 ``` ts
     let queryAll: Data[] = conn.table(Data)
-    .query();
+        .query();
     let queryBetween: Data[] = conn.table(Data)
         .between(o => o.age, "20", "30")
         .query();
