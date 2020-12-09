@@ -47,8 +47,9 @@
     let data = new Data();
     //直接插入
     conn.insert(data);
-    let id = data.id;
     //条件更新或插入数据
+    //注:基于字符串解析, 无法直接获取data.id的值, 需要通过对象传入
+    let id = data.id;
     let ret = conn.table(Data)
         .where(o => o.id == id && id != 0, { id })
         .updateOrInsert(data);
