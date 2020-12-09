@@ -35,22 +35,23 @@ function BindParameter(command: SqliteCommand, value: any): number {
     /**
      * SqliteParameter(DbType dbType, object value)构造函数可正常使用
      * SqliteParameter(DbType dbType, string value)不是插入数值的构造
+     * 此处请自行封装方法
      */
     if (value === undefined || value === null || value === void 0)
-        return command.Parameters.Add(CS.SqliteUtil.ObjectParameter(DbType.String, ""));
+        return command.Parameters.Add(new SqliteParameter(DbType.String, ""));
 
     switch (typeof (value)) {
         case "string":
-            return command.Parameters.Add(CS.SqliteUtil.ObjectParameter(DbType.String, value));
+            return command.Parameters.Add(new SqliteParameter(DbType.String, value));
         case "number":
-            return command.Parameters.Add(CS.SqliteUtil.ObjectParameter(DbType.Double, value));
+            return command.Parameters.Add(new SqliteParameter(DbType.Double, value));
         case "bigint":
-            return command.Parameters.Add(CS.SqliteUtil.ObjectParameter(DbType.Int64, value));
+            return command.Parameters.Add(new SqliteParameter(DbType.Int64, value));
         case "boolean":
-            return command.Parameters.Add(CS.SqliteUtil.ObjectParameter(DbType.Int32, value));
+            return command.Parameters.Add(new SqliteParameter(DbType.Int32, value));
         //对Object类型进行Json序列化
         case "object":
-            return command.Parameters.Add(CS.SqliteUtil.ObjectParameter(DbType.String, value));
+            return command.Parameters.Add(new SqliteParameter(DbType.String, value));
     }
 
     throw new Error("NotSupportedException: Cannot store type " + typeof (value));
