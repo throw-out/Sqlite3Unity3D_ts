@@ -1,60 +1,36 @@
-import * as CS from "csharp";
 import { DBConnection } from "./sqlite3/dbConnection";
-
-//#region 
-const log = console.log;
-const err = console.error;
-function join(arr: any[], separator: string) {
-    let msg = "";
-    for (let i = 0; i < arr.length; i++) {
-        if (i > 0) msg += separator;
-        msg += arr[i];
-    }
-    return msg;
-}
-function _log(...args: any[]) {
-    let msg = join(args, ",") + "\n" + new Error().stack;
-    log(msg);
-}
-function _error(...args: any[]) {
-
-}
-console.log = _log
-console.error = _error
-//#endregion
+import { Column } from "./sqlite3/utils/attribute";
 
 
-class A {
-    a: number = 0;
-    b: number = 0;
-    c: string = "c";
-    d: string = "d";
-    e: string = "e";
+class Data {
+    @Column("number")
+    public id: number;
+    @Column("string")
+    public name: string;
+    @Column("number")
+    public age: number;
+    @Column("number")
+    public sex: number;
 }
 
-function newObject() {
-    let path = "C:/Users/Layer/Desktop/test.db";
-    if (!CS.System.IO.File.Exists(path))
-        DBConnection.createFile(path);
+let conn = new DBConnection("db path");
+conn.open();
 
-    let conn = new DBConnection(path);
-    try {
-        conn.trace = true;
-        conn.open();
+let data = new Data();
+let state = conn.table(Data)
+    .where(o => o.id == data.id && data.id != 0)
+    .updateOrInsert(data);
 
-        let a = new A();
-        a.a = CS.UnityEngine.Random.Range(1, 100);
-        let count = conn.table<A>(A.prototype)
-            .where(o => o.a == 1)
-            .updateOrInsert(a);
+let id = data.id;
+state = conn.table(Data)
+    .where(o => o.id == id && id != 0, { id })
+    .updateOrInsert(data);
 
-        console.log(count);
-    } finally {
-        conn.dispose();
-    }
-}
-export {
-    newObject
-}
+let queryAll: Data[] = conn.table(Data)
+    .query();
+let queryBetween: Data[] = conn.table(Data)
+    .between(o => o.age, "20", "30")
+    .query();
+
 
 
