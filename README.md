@@ -12,46 +12,68 @@
   > 此项目基于[SQLite4Unity3d](https://github.com/robertohuertasm/SQLite4Unity3d)
  
 ## 如何使用?
+* **数据类**
+``` ts
+  class Data {
+      @Column("number")
+      public id: number;
+      @Column("string")
+      public name: string;
+      @Column("number")
+      public age: number;
+      @Column("number")
+      public sex: number;
+  }
+```
 
 * **创建并打开连接**
 ``` ts
-    let conn
+    let conn = new DBConnection("db path");
+    conn.open();
 ```
 
 * **表操作**
 ``` ts
-    let conn
+    //创建表
+    conn.createTable(Data);
+    //清空表
+    conn.clearTable(Data);
+    //删除表
+    conn.dropTable(Data);
 ```
 
-* **插入记录**
+* **插入/更新记录**
 ``` ts
-    let conn
+    let data = new Data();
+    //直接插入
+    conn.insert(data);
+    let id = data.id;
+    //条件更新或插入数据
+    let ret = conn.table(Data)
+        .where(o => o.id == id && id != 0, { id })
+        .updateOrInsert(data);
 ```
 
 * **查询记录**
 ``` ts
-    let conn
-```
-
-* **更新记录**
-``` ts
-    let conn
+    let queryAll: Data[] = conn.table(Data)
+    .query();
+    let queryBetween: Data[] = conn.table(Data)
+        .between(o => o.age, "20", "30")
+        .query();
 ```
 
 - **删除记录**
 ``` ts
-    let conn
-```
-
-- **数据类**
-``` ts
-    let conn
+    let ret = conn.table(Data)
+        .where(o => o.id == 10)
+        .delete();
 ```
 
 ## 特点
 * 无需手动构建SQL语句
 * 运行时构建对象和数据表信息
-* 有限的支持Lambda表达式解析(字符串解析), 助力编写更健壮的代码
+* 有限的支持Lambda表达式解析(字符串解析)
 
 ## **性能测试**
 * 暂无
