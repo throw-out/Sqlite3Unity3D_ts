@@ -9,17 +9,19 @@ class Orm {
         if (col.autoInc) decl += "AUTOINCREMENT ";
         if (col.unique) decl += "UNIQUE ";
         if (col.notNull) decl += "NOT NULL ";
-        if (col.defaultValue && col.defaultValue.length > 0)
+        let v_type = typeof (col.defaultValue);
+        if (v_type !== "undefined" && v_type !== "object" && v_type !== "function")
             decl += "DEFAULT \"" + col.defaultValue + "\" ";
         return decl.trim();
     }
     static sqlType(col: DBColumn): string {
         switch (col.propType) {
             case "string":
-                if (col.maxLength)
+                if (col.maxLength !== undefined)
                     return "VARCHAR(" + col.maxLength + ")";
                 return "VARCHAR";
             case "number":
+                if (col.pk) return "INTEGER";
                 return "REAL";
             case "bigint":
                 return "BIGINT";

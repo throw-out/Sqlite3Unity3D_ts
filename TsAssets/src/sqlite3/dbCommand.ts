@@ -7,26 +7,26 @@ type SqliteDataReader = CS.Mono.Data.Sqlite.SqliteDataReader;
 const SqliteParameter = CS.Mono.Data.Sqlite.SqliteParameter;
 const DbType = CS.System.Data.DbType;
 
-function ReadValue(reader: SqliteDataReader, name: string | number, type: string) {
-    if (typeof name === "string") {
-        let index = reader.GetOrdinal(name);
+function ReadValue(reader: SqliteDataReader, index: string | number, type: string) {
+    if (typeof index === "string") {
+        index = reader.GetOrdinal(index);
         return ReadValue(reader, index, type);
     }
-    if (reader.IsDBNull(name))
-        return null;
+    if (reader.IsDBNull(index))
+        return undefined;
 
     switch (type) {
         case "string":
-            return reader.GetString(name);
+            return reader.GetString(index);
         case "number":
-            return reader.GetDouble(name);
+            return reader.GetDouble(index);
         case "bigint":
-            return reader.GetInt64(name);
+            return reader.GetInt64(index);
         case "boolean":
-            return reader.GetInt32(name) != 0;
+            return reader.GetInt32(index) != 0;
         //对Object类型从Json反序列化
         case "object":
-            return JSON.parse(reader.GetString(name));
+            return JSON.parse(reader.GetString(index));
     }
 
     throw new Error("NotSupportedException: Cannot store type " + type);
@@ -34,27 +34,38 @@ function ReadValue(reader: SqliteDataReader, name: string | number, type: string
 function BindParameter(command: SqliteCommand, value: any): number {
     /**
      * SqliteParameter(DbType dbType, object value)构造函数可正常使用
-     * SqliteParameter(DbType dbType, string value)将不能插入数值
-     * 这应该是一个BUG (笑)
+     * SqliteParameter(DbType dbType, string value)不是插入数值的构造
      */
-    if (!value)
-        return command.Parameters.Add(new SqliteParameter(DbType.String, ""));
+    if (value === undefined || value === null || value === void 0)
+        return command.Parameters.Add(CS.SqliteUtil.ObjectParameter(DbType.String, ""));
 
     switch (typeof (value)) {
         case "string":
-            return command.Parameters.Add(new SqliteParameter(DbType.String, value));
+            return command.Parameters.Add(CS.SqliteUtil.ObjectParameter(DbType.String, value));
         case "number":
-            return command.Parameters.Add(new SqliteParameter(DbType.Double, value));
+            return command.Parameters.Add(CS.SqliteUtil.ObjectParameter(DbType.Double, value));
         case "bigint":
-            return command.Parameters.Add(new SqliteParameter(DbType.Int64, value));
+            return command.Parameters.Add(CS.SqliteUtil.ObjectParameter(DbType.Int64, value));
         case "boolean":
-            return command.Parameters.Add(new SqliteParameter(DbType.Int32, value ? 1 : 0));
+            return command.Parameters.Add(CS.SqliteUtil.ObjectParameter(DbType.Int32, value));
         //对Object类型进行Json序列化
         case "object":
-            return command.Parameters.Add(new SqliteParameter(DbType.String, JSON.stringify(value)));
+            return command.Parameters.Add(CS.SqliteUtil.ObjectParameter(DbType.String, value));
     }
 
     throw new Error("NotSupportedException: Cannot store type " + typeof (value));
+}
+function copyValue(val: any) {
+    switch (typeof (val)) {
+        case "object":
+            let ret: object = val instanceof Array ? [] : Object.create(Object.getPrototypeOf(val));
+            Object.assign(ret, val);
+            return ret;
+        case "function":
+            return val();
+        default:
+            return val;
+    }
 }
 
 class DBCommand {
@@ -79,7 +90,7 @@ class DBCommand {
             this.finally(command);
         }
     }
-    executeQuery<T>(map: DBMapping) {
+    executeQuery<T extends object>(map: DBMapping) {
         if (this._conn.trace) console.log(this);
 
         let command = this.prepare();
@@ -93,7 +104,9 @@ class DBCommand {
                 let obj = map.createInstance();
                 for (let i = 0; i < columns.length; i++) {
                     let col = columns[i];
-                    obj[col.prop] = ReadValue(reader, col.name, col.propType);
+                    let val = ReadValue(reader, col.name, col.propType) ?? copyValue(col.defaultValue);
+                    if (val !== undefined && val !== null && val !== void 0)
+                        obj[col.prop] = val;
                 }
                 result.push(obj as T);
             }

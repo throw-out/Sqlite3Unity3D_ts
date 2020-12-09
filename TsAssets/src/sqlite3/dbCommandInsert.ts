@@ -1,10 +1,8 @@
 import * as CS from "csharp";
 import { BindParameter } from "./dbCommand";
 import { DBConnection } from "./dbConnection";
-import { DBMapping } from "./dbMapping";
 
 type SqliteCommand = CS.Mono.Data.Sqlite.SqliteCommand;
-type SqliteDataReader = CS.Mono.Data.Sqlite.SqliteDataReader;
 const ConnectionState = CS.System.Data.ConnectionState;
 
 class DBCommandInsert {

@@ -1,13 +1,15 @@
 import * as CS from "csharp";
 import { DBCommand } from "./dbCommand";
 import { DBMapping } from "./dbMapping";
-import { DBTable } from "./dbTable";
+import { DBQuery } from "./dbQuery";
 import { Orm } from "./orm";
 
+type Type<T> = { new(...args: any[]): T };
 
+/**连接实例 */
 class DBConnection {
     //Mapping
-    private _mappings: WeakMap<Object, DBMapping>;
+    private _mappings: WeakMap<Type<object>, DBMapping>;
     private _mappingSet: Set<DBMapping>;
     //连接实例
     private _handle: CS.Mono.Data.Sqlite.SqliteConnection;
@@ -20,7 +22,6 @@ class DBConnection {
     private _trace: boolean = false;
     //事务信息
     private _transactionDepth: number = 0;
-
     //Getter 丶 Setter
     get handle() { return this._handle; }
     get datapath() { return this._datapath; }
@@ -64,16 +65,14 @@ class DBConnection {
     dispose() {
         let set = this._mappingSet;
         if (set) {
-            for (let map of set) {
-                map.dispose();
-            }
+            set.forEach(mapping => mapping.dispose());
         }
         this.close();
         this._mappings = null;
         this._mappingSet = null;
     }
     changePassword(password: string) {
-        if (!this.opened)
+        if (!this._opened)
             throw new Error("Cannot create commands from unopened database");
 
         this._handle.ChangePassword(password);
@@ -81,25 +80,25 @@ class DBConnection {
     }
 
     //#region  创建表丶删除表丶清空表
-    createTable(proto: any) {
-        let map = this.getMapping(proto);
-        let query = `CREATE TABLE IF NOT EXISTS "${map.tableName}"(\n)`;
-        for (let i = 0; i < map.columns.length; i++) {
+    createTable(type: Type<object>) {
+        let mapping = this.getMapping(type);
+        let query = `CREATE TABLE IF NOT EXISTS "${mapping.tableName}"(\n)`;
+        for (let i = 0; i < mapping.columns.length; i++) {
             if (i >= 0) query += ",\n";
-            query += Orm.sqlDecl(map.columns[i]);
+            query += Orm.sqlDecl(mapping.columns[i]);
         }
         query += ")";
 
         return this.executeUpdate(query);
     }
-    dropTable(proto: any) {
-        let map = this.getMapping(proto);
-        let query = `DROP TABLE IF EXISTS "${map.tableName}"`;
+    dropTable(type: Type<object>) {
+        let mapping = this.getMapping(type);
+        let query = `DROP TABLE IF EXISTS "${mapping.tableName}"`;
         return this.executeUpdate(query);
     }
-    clearTable(proto: any) {
-        let map = this.getMapping(proto);
-        let query = `DELETE FROM "${map.tableName}"`;
+    clearTable(type: Type<object>) {
+        let mapping = this.getMapping(type);
+        let query = `DELETE FROM "${mapping.tableName}"`;
         return this.executeUpdate(query);
     }
     //#endregion
@@ -159,65 +158,71 @@ class DBConnection {
     //#endregion
 
     //#region 查询记录
-    table<T>(proto: T) {
-        return new DBTable<T>(this, this.getMapping(proto))
+    binding<T extends object>(type: Type<T>) {
+        return new DBConnectionBinding<T>(this, type);
     }
-    get<T>(proto: T, pk: any) {
-        let map = this.getMapping(proto);
-        let result = this.executeQuery<T>(proto, map.getByPrimaryKeySql, pk);
+    table<T extends object>(type: Type<T>) {
+        return new DBQuery<T>(this, this.getMapping(type))
+    }
+    get<T extends object>(type: Type<T>, pk: any) {
+        let mapping = this.getMapping(type);
+        let result = this.executeQuery<T>(type, mapping.getByPrimaryKeySql, pk);
         return result.length > 0 ? result[0] : null;
     }
-    lastInsertRowid(proto: any) {
+    lastInsertRowid(type: Type<object>) {
         var cmd = this.createCommand("");
-        return cmd.lastInserRowid(this.getMapping(proto));
+        return cmd.lastInserRowid(this.getMapping(type));
     }
     //#endregion
 
 
     //#region 插入记录
     insert(obj: any): number {
-        return this._insert(obj, "", this.getMapping(Object.getPrototypeOf(obj)));
+        let proto = Object.getPrototypeOf(obj);
+        return this._insert(obj, "", this.getMapping(proto.constructor));
     }
     insertOrReplace(obj: any): number {
-        return this._insert(obj, "OR REPLACE", this.getMapping(Object.getPrototypeOf(obj)));
+        let proto = Object.getPrototypeOf(obj);
+        return this._insert(obj, "OR REPLACE", this.getMapping(proto.constructor));
     }
     insertAll(objs: Array<any>): number {
         if (!objs || objs.length == 0)
             return 0;
-        return this._insertAll(objs, "", this.getMapping(Object.getPrototypeOf(objs[0])));
+        let proto = Object.getPrototypeOf(objs[0]);
+        return this._insertAll(objs, "", this.getMapping(proto.constructor));
     }
-    private _insertAll(objs: Array<any>, extra: "" | "OR REPLACE", map: DBMapping): number {
-        if (!objs || !map)
+    private _insertAll(objs: Array<any>, extra: "" | "OR REPLACE", mapping: DBMapping): number {
+        if (!objs || !mapping)
             return 0;
 
         let count = 0;
         try {
             this.runInTransaction(() => {
                 objs.forEach(obj => {
-                    count += this._insert(obj, extra, map);
+                    count += this._insert(obj, extra, mapping);
                 });
             });
         } finally {
-            map.dispose();
+            mapping.dispose();
         }
         return count;
     }
-    private _insert(obj: any, extra: "" | "OR REPLACE", map: DBMapping): number {
-        if (!obj || !map)
+    private _insert(obj: any, extra: "" | "OR REPLACE", mapping: DBMapping): number {
+        if (!obj || !mapping)
             return 0;
 
         let replacing = extra === "OR REPLACE";
 
-        let cols = replacing ? map.insertOrReplaceColumns : map.insertColumns;
+        let cols = replacing ? mapping.insertOrReplaceColumns : mapping.insertColumns;
         let vals = new Array<any>();
         for (let col of cols)
             vals.push(obj[col.prop]);
 
-        let cmd = map.getInsertCommand(this, extra ?? "");
+        let cmd = mapping.getInsertCommand(this, extra ?? "");
         let count = cmd.executeUpdate(vals);
 
-        if (map.pk && map.pk.autoInc) {
-            obj[map.pk.prop] = this.lastInsertRowid(map.proto);
+        if (mapping.pk && mapping.pk.autoInc) {
+            obj[mapping.pk.prop] = this.lastInsertRowid(mapping.Type);
         }
 
         return count;
@@ -228,12 +233,12 @@ class DBConnection {
         let command = this.createCommand(query, ...args);
         return command.executeUpdate();
     }
-    executeQuery<T>(proto: any, query: string, ...args: any[]): Array<T> {
+    executeQuery<T extends object>(type: Type<T>, query: string, ...args: any[]): Array<T> {
         let command = this.createCommand(query, ...args);
-        return command.executeQuery<T>(this.getMapping(proto));
+        return command.executeQuery<T>(this.getMapping(type));
     }
     newCommand(): DBCommand {
-        if (!this.opened)
+        if (!this._opened)
             throw new Error("Cannot create commands from unopened database");
         return new DBCommand(this);
     }
@@ -245,37 +250,37 @@ class DBConnection {
         return command;
     }
     //Mapping
-    getMappingForce(proto: any): DBMapping {
-        return new DBMapping(proto);
-    }
-    getMapping(proto: any): DBMapping {
+    private getMapping(type: Type<object>): DBMapping {
+        if (typeof (type) !== "function")
+            throw new Error("ctor is not constructor:" + type);
+
         if (!this._mappings) {
             this._mappings = new WeakMap();
             this._mappingSet = new Set();
         }
-        let map = this._mappings.get(proto);
-        if (!map) {
-            map = new DBMapping(proto);
+        let mapping = this._mappings.get(type);
+        if (!mapping) {
+            mapping = new DBMapping(type);
             //校验当前数据库信息
-            if (this.proofTestTable(map)) {
-                this._mappings.set(proto, map);
-                this._mappingSet.add(map);
+            if (this.proofTable(mapping)) {
+                this._mappings.set(type, mapping);
+                this._mappingSet.add(mapping);
             }
         }
-        return map;
+        return mapping;
     }
-    //校验当前数据表
-    proofTestTable(map: DBMapping) {
+    /**校验当前数据表 */
+    private proofTable(mapping: DBMapping) {
         //尝试创建表
-        let create_sql = "CREATE TABLE IF NOT EXISTS \"" + map.tableName + "\"(\n";
-        for (let i = 0; i < map.columns.length; i++) {
+        let create_sql = "CREATE TABLE IF NOT EXISTS \"" + mapping.tableName + "\"(\n";
+        for (let i = 0; i < mapping.columns.length; i++) {
             if (i > 0) create_sql += ",\n";
-            create_sql += Orm.sqlDecl(map.columns[i]);
+            create_sql += Orm.sqlDecl(mapping.columns[i]);
         }
         create_sql += ")";
         this.executeUpdate(create_sql);
         //从数据库拉取表信息<与当前表比对字段信息>
-        let command = this.createCommand("SELECT sql FROM sqlite_master WHERE type = \"table\" AND name = ? ;", map.tableName);
+        let command = this.createCommand("SELECT sql FROM sqlite_master WHERE type = \"table\" AND name = ? ;", mapping.tableName);
         let exists_sql = command.executeScalar<string>("string");
         //比对表的差异性 
         let create_cols = this.proofColumns(create_sql);
@@ -294,11 +299,11 @@ class DBConnection {
         //重构表
         if (rebuild) {
             //寻找相同字段<继承>
-            let samecols: string = undefined;
+            let samecols: string = "";
             for (let i = 0; i < create_cols.length; i++) {
                 for (let j = 0; j < exists_cols.length; j++) {
                     if (create_cols[i].name === exists_cols[j].name) {
-                        if (samecols) samecols += ",";
+                        if (samecols.length > 0) samecols += ",";
                         samecols += "\"" + create_cols[i].name + "\"";
                         break;
                     }
@@ -306,16 +311,16 @@ class DBConnection {
             }
             //创建临时表->迁移相同字段数据->删除临时表
             this.runInTransaction(() => {
-                let table_name = map.tableName;
-                let table_temp = map.tableName + "_temp";
+                let table_name = mapping.tableName;
+                let table_temp = mapping.tableName + "_temp";
                 this.executeUpdate(`PRAGMA foreign_keys = off;`);
                 this.executeUpdate(`DROP TABLE IF EXISTS \"${table_temp}\" ;`);
                 this.executeUpdate(`CREATE TABLE \"${table_temp}\" AS SELECT * FROM \"${table_name}\" ;`);
                 this.executeUpdate(`DROP TABLE \"${table_name}\" ;`);
                 this.executeUpdate(create_sql);
-                if (samecols)
+                if (samecols.length > 0)
                     this.executeUpdate(`INSERT INTO \"${table_name}\" ( ${samecols} ) SELECT ${samecols} FROM \"${table_temp}\";`);
-                this.executeUpdate(`DROP TABLE \"${table_temp}\" ;`);
+                this.executeUpdate(`DROP TABLE \"${table_temp}\" ;`)
                 this.executeUpdate(`PRAGMA foreign_keys = on;`);
 
                 console.warn(`column exception, rebuild sql: ${table_name}\n${create_sql}`);
@@ -324,7 +329,7 @@ class DBConnection {
         //表追加字段
         else if (add_cols && add_cols.length > 0) {
             this.runInTransaction(() => {
-                let table_name = map.tableName;
+                let table_name = mapping.tableName;
                 for (var col of add_cols) {
                     this.executeUpdate(`ALTER TABLE \"${table_name}\" ADD COLUMN ${col} ;`);
                     console.warn(`Alter table add column ${table_name}:${col}`);
@@ -334,7 +339,8 @@ class DBConnection {
 
         return true;
     }
-    proofColumns(sql: string) {
+    /**从sql dll语句解析字段信息 */
+    private proofColumns(sql: string) {
         if (!sql)
             throw new Error("Can't create a TableMapping instance, sql: " + sql);
         let i1 = sql.indexOf("(");
@@ -369,4 +375,99 @@ class DBConnection {
     }
 }
 
-export { DBConnection };
+/**绑定构造函数的连接实例 */
+class DBConnectionBinding<T extends object> {
+    private _conn: DBConnection;
+    private _type: Type<T>;
+    //Getter 丶 Setter
+    get handle() { return this._conn.handle; }
+    get datapath() { return this._conn.datapath; }
+    get password() { return this._conn.password; }
+    get opened() { return this._conn.opened; }
+    get trace() { return this._conn.trace; }
+    set trace(val: boolean) { this._conn.trace = val; }
+    get connection() { return this._conn; }
+
+    constructor(conn: DBConnection, type: Type<T>) {
+        this._conn = conn;
+        this._type = type;
+    }
+    open() {
+        this._conn.open();
+    }
+    close() {
+        this._conn.close();
+    }
+    dispose() {
+        this._conn.dispose();
+    }
+    changePassword(password: string) {
+        this._conn.changePassword(password);
+    }
+    createTable() {
+        return this._conn.createTable(this._type);
+    }
+    dropTable() {
+        return this._conn.dropTable(this._type);
+    }
+    clearTable() {
+        return this._conn.clearTable(this._type);
+    }
+    runInTransaction(action: Function) {
+        this._conn.runInTransaction(action);
+    }
+    beginTransaction() {
+        this._conn.beginTransaction();
+    }
+    commit() {
+        this._conn.commit();
+    }
+    rollback(savepoint?: string) {
+        this._conn.rollback(savepoint);
+    }
+    release(savepoint: string) {
+        this._conn.release(savepoint);
+    }
+
+    table() {
+        return this._conn.table<T>(this._type);
+    }
+    get(pk: any) {
+        return this._conn.get<T>(this._type, pk);
+    }
+    lastInsertRowid() {
+        return this._conn.lastInsertRowid(this._type);
+    }
+    insert(obj: any) {
+        return this._conn.insert(obj);
+    }
+    insertOrReplace(obj: any) {
+        return this._conn.insertOrReplace(obj);
+    }
+    insertAll(obj: Array<any>) {
+        return this._conn.insertAll(obj);
+    }
+
+    executeUpdate(query: string, ...args: any[]) {
+        return this._conn.executeUpdate(query, ...args);
+    }
+    executeQuery(query: string, ...args: any[]) {
+        return this._conn.executeQuery<T>(this._type, query, ...args);
+    }
+
+    newCommand(): DBCommand {
+        return this._conn.newCommand();
+    }
+    createCommand(query: string, ...args: any[]): DBCommand {
+        return this._conn.createCommand(query, ...args);
+    }
+
+    static createFile(path: string, del_exists?: boolean): boolean {
+        return DBConnection.createFile(path, del_exists);
+    }
+}
+
+export {
+    DBConnection,
+    DBConnectionBinding
+};

@@ -1,10 +1,11 @@
-const binaryChars = [">=", "<=", "==", "!=", ">", "<"];
+const binaryChars = [">=", "<=", "==", "===", "!=", "!==", ">", "<"];
 const multipleChars = ["&&", "||"];
+
 class Util {
     /** 是否由多个表达式联合组成的 */
     static isMultiple(str: string): boolean {
         if (str) {
-            str = this.filter(str);
+            str = this.filterString(str);
             for (var v of multipleChars) {
                 if (str.indexOf(v) >= 0)
                     return true;
@@ -15,7 +16,7 @@ class Util {
     /** 是否二元表达式 */
     static isBinary(str: string): boolean {
         if (str) {
-            str = this.filter(str);
+            str = this.filterString(str);
             for (var v of binaryChars) {
                 if (str.indexOf(v) >= 0)
                     return true;
@@ -26,7 +27,7 @@ class Util {
     /** 是否常量表达式 */
     static isConstant(str: string): boolean {
         if (str) {
-            str = this.filter(str);
+            str = this.filterString(str);
             return str.indexOf(".") < 0;
         }
         return false;
@@ -34,7 +35,7 @@ class Util {
     /** 是否字段调用 */
     static isFieldCall(str: string, parameters: string[]): boolean {
         if (str) {
-            str = this.filter(str);
+            str = this.filterString(str);
             if (str.indexOf(".") >= 0 && str.indexOf("(") < 0) {
                 for (var param of parameters) {
                     if (str.indexOf(param + ".") >= 0)
@@ -47,7 +48,7 @@ class Util {
     /** 是否方法调用 */
     static isMethodCall(str: string, parameters: string[]): boolean {
         if (str) {
-            str = this.filter(str);
+            str = this.filterString(str);
             if (str.indexOf(".") >= 0 && str.indexOf("(") > 0) {
                 for (var param of parameters) {
                     if (str.indexOf(param + ".") >= 0)
@@ -58,8 +59,8 @@ class Util {
         return false;
     }
     /** 过滤字符串, 排除空格干扰, 排除字符串中字符干扰 */
-    static filter(str: string) {
-        // TODO 实现
+    static filterString(str: string) {
+        // TODO 实现 
         return str;
     }
     /** 查找括号包含的表达式 */
@@ -104,7 +105,8 @@ class Util {
                         break;
                     }
                 }
-                if (out) break;
+                if (out)
+                    break;
                 rep_expr = rep_expr.substring(1, rep_expr.length - 1).trim();
             }
             return rep_expr;
@@ -112,7 +114,7 @@ class Util {
         return str;
     }
     /** 符号转为NodeType */
-    static stringToNodeType(str: string) {
+    static stringToNodeType(str: string): NodeType {
         switch (str) {
             case ">":
                 return NodeType.GreaterThan;
@@ -138,7 +140,7 @@ class Util {
         return NodeType.Unknown;
     }
     /** NodeType转为符号*/
-    static nodeTypeToString(type: NodeType) {
+    static nodeTypeToString(type: NodeType): string {
         switch (type) {
             case NodeType.GreaterThan:
                 return ">";
@@ -204,7 +206,6 @@ class Util {
         return str;
     }
 }
-
 enum NodeType {
     Unknown,
 
@@ -263,7 +264,11 @@ class Lambda {
             throw new Error("Not Supported Expression: " + expr);
         this._expr = expr.substring(index + 2).trim();
         this._parameters = new Array();
-        expr.substring(0, index).replace("(", "").replace(")", "").split(",").forEach(name => this._parameters.push(name.trim()));
+        expr.substring(0, index)
+            .replace("(", "")
+            .replace(")", "")
+            .split(",")
+            .forEach(name => this._parameters.push(name.trim()));
     }
     get expression(): Expression {
         return Util.toExpression(this._expr, this._parameters, this._values);

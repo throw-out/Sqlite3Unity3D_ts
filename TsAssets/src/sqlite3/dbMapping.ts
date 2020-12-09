@@ -1,11 +1,10 @@
-import { DBColumn } from "./dbColumn";
-import { Decorator } from "./utils/decorator";
+import { ClassMetadata, FieldMetadata } from "./utils/decorator";
 import { DBConnection } from "./dbConnection";
 import { DBCommandInsert } from "./dbCommandInsert";
+import { DBColumn, DBType } from "./dbColumn";
 import {
     Table,
     Column,
-    Ignore,
     PrimaryKey,
     AutoInc,
     Unique,
@@ -14,10 +13,12 @@ import {
     MaxLength
 } from "./utils/attribute";
 
+type Type<T> = { new(...args: any[]): T };
+
 /**数据表映射信息 */
 class DBMapping {
     /**表对应的js原型 proto */
-    proto: any;
+    Type: Type<object>;
     /**数据表名称 */
     tableName: string;
     /**主键 */
@@ -29,7 +30,7 @@ class DBMapping {
     //插入命令行
     private _insertCommand: DBCommandInsert;
     private _insertCommandExtra: string;
-
+    /**字段信息 */
     private _insertColumns: DBColumn[];
     private _insertOrReplaceColumns: DBColumn[];
     get insertColumns(): DBColumn[] {
@@ -49,50 +50,50 @@ class DBMapping {
         return this._insertOrReplaceColumns;
     }
 
-    constructor(proto: any) {
-        let ctor = proto.constructor;
-        let name: string = Decorator.first(proto, undefined, Table)?.info ?? ctor.name;
-
-        this.proto = proto;
+    constructor(type: Type<object>) {
+        this.Type = type;
+        //数据表名称
+        let name: string = ClassMetadata.getFirst(type, Table)?.info ?? type.name;
         this.tableName = name;
-
-        //Columns
+        //获取字段信息
         this.columns = new Array();
-        let ins = new (proto.constructor)();
-        Object.keys(ins).forEach(key => {
-            if (Decorator.first(proto, key, Ignore))
-                return;
+        for (let key of FieldMetadata.getFields(type, true)) {
+            let conf = FieldMetadata.getFirst(type, key, Column, true)?.info as { type: DBType, alias: string };
+            if (!conf) continue;
 
-            let name: string = Decorator.first(proto, key, Column)?.info
-            let pk: boolean = Decorator.first(proto, key, PrimaryKey, true) !== null;
-            let autoInc: boolean = pk && Decorator.first(proto, key, AutoInc, true) !== null;
-            let unique: boolean = Decorator.first(proto, key, Unique, true) !== null;
-            let notNull: boolean = Decorator.first(proto, key, NotNull, true) !== null;
-            let value: string = Decorator.first(proto, key, DefaultValue, true)?.info;
-            let len: number = Decorator.first(proto, key, MaxLength, true)?.info;
+            let pk: boolean = !!FieldMetadata.getFirst(type, key, PrimaryKey, true);
+            let autoInc: boolean = pk && !!FieldMetadata.getFirst(type, key, AutoInc, true);
+            let unique: boolean = !!FieldMetadata.getFirst(type, key, Unique, true);
+            let notNull: boolean = !!FieldMetadata.getFirst(type, key, NotNull, true);
+            let value: boolean = FieldMetadata.getFirst(type, key, DefaultValue, true)?.info;
+            let len: number = FieldMetadata.getFirst(type, key, MaxLength, true)?.info;
 
-            let col = new DBColumn({
+            let col: DBColumn = {
                 prop: key,
-                propType: typeof (ins[key]),
-                name: name,
+                propType: conf.type,
+                name: conf.alias ?? key,
                 pk: pk,
                 autoInc: autoInc,
                 unique: unique,
                 notNull: notNull,
                 defaultValue: value,
                 maxLength: len,
-            });
+            };
             this.columns.push(col);
             if (col.pk) this.pk = col;
-        });
+        }
+        if (this.columns.length <= 0)
+            throw new Error(`数据表${type.name}(${this.tableName}), 没有有效字段`);
 
+        let info = "";
+        this.columns.forEach(col => info += "\n" + JSON.stringify(col));
+        console.log(`DBMapping: ${this.tableName}->Columns:${info}`);
         //PK
         if (this.pk)
             this.getByPrimaryKeySql = `SELECT * FROM "${this.tableName}" WHERE "${this.pk.name}" = ?`;
         else
             this.getByPrimaryKeySql = `SELECT * FROM "${this.tableName}" LIMIT 1`;
     }
-
     findColumn(name: string): DBColumn {
         for (let i = 0; i < this.columns.length; i++) {
             if (this.columns[i].name == name)
@@ -142,9 +143,8 @@ class DBMapping {
         cmd.commandText = insertSql;
         return cmd;
     }
-    /**从proto原型中创建实例 */
     createInstance() {
-        return <Object>(new (this.proto.constructor)());
+        return new (this.Type)();
     }
 }
 
