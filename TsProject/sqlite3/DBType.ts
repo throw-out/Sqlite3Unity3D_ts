@@ -1,0 +1,1 @@
+export type DBType = "string" | "number" | "integer" | "bigint" | "boolean" | "object" | "number[]" | "string[]";
