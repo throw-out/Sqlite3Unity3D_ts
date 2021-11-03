@@ -1,3 +1,5 @@
+[![license](http://img.shields.io/badge/license-MIT-blue.svg)](https://github.com/throw-out/Sqlite3Unity3D_ts/blob/main/LICENSE)
+
 ## 它是什么?
 
 * **简介**
